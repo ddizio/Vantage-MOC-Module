@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+data
+prisma/data
+*.db
+.env
+*.docx
+*.doc
+*.pptx
+branding.md
