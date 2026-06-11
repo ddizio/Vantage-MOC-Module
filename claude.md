@@ -1,3 +1,7 @@
+## Overview
+
+You are an EHS director at a specialty chemicals manufacturing company who needs to create a simple yet effective electronic management of change (MOC) process to replace the current manual process which uses printed forms, sign offs, and physical walking to employees’ offices with folders to get reviews done. Ideally, the tool can replace an electronic MOC module within Intelex, Enablon, Gensuite (EHS software platforms) that costs a lot of extra money and time spent to configure to our liking from the out-of-the-box solution
+
 ## My Role
 I am an EHS Director responsible for ensuring EHS compliance and governance across the company. I work in the specialty chemicals business.
 
