@@ -77,6 +77,13 @@ export default async function MocDetailPage({
     user.isAdmin || myRoles.includes("PROCESS_SAFETY") || myRoles.includes("EHSS_MANAGER");
   const editable = ["DRAFT", "REJECTED"].includes(moc.status);
   const openRecord = !["CLOSED", "CANCELED"].includes(moc.status);
+  // During review, the lead, an admin, or an assigned (still-pending) approver
+  // may revise the description/scope.
+  const isAssignedApprover = moc.approvals.some(
+    (a) => a.assignedToId === user.id && a.decision === "PENDING"
+  );
+  const canEditScope =
+    editable || (moc.status === "REVIEW" && (isLead || isAssignedApprover));
 
   const siteMembers = await prisma.siteMembership.findMany({
     where: { siteId: moc.siteId, user: { active: true } },
@@ -133,12 +140,12 @@ export default async function MocDetailPage({
           </p>
         </div>
         <div className="no-print flex items-center gap-3">
-          {editable && (
+          {canEditScope && (
             <Link
               href={`/mocs/${moc.id}/edit`}
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
             >
-              Edit draft
+              {editable ? "Edit draft" : "Edit description"}
             </Link>
           )}
           <Link

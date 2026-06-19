@@ -165,6 +165,17 @@
   dl.kv dt { font-size:11px; color: var(--ink3); text-transform:uppercase; letter-spacing:.03em; }
   dl.kv dd { margin:0 0 6px; }
   .section-h { font-size:11px; color:var(--ink3); text-transform:uppercase; letter-spacing:.04em; margin:14px 0 4px;}
+
+  /* Checklists */
+  table.cl td { padding:6px 6px; border-bottom:1px solid #f0f1f0; vertical-align:top; }
+  .cl-l { width:54%; font-size:13px; }
+  .cl-a { white-space:nowrap; }
+  .clbtn { border:1px solid #cfd3cf; background:#fff; color:var(--ink3); border-radius:6px;
+    padding:3px 9px; font-size:12px; margin-right:4px; }
+  .clbtn.on { border-color:var(--green); background:#e6f7f3; color:var(--green-t); font-weight:600; }
+  .clbtn.on.no { border-color:var(--orange); background:#fff3ed; color:var(--orange); }
+  .cl-r input { width:100%; border:1px solid #e3e5e3; border-radius:6px; padding:4px 7px; font-size:12px; }
+  .chead a { font-size:12.5px; font-weight:500; }
 </style>
 </head>
 <body>
@@ -214,45 +225,97 @@ const TYPE_LABELS = {
 };
 
 // Approval chains per form type (mirrors the real app's workflow.ts)
+// status = MOC status while a stage's signatures are being collected.
+// next   = status once every signature in the stage is approved.
+// auto   = open the following stage automatically when this one completes
+//          (otherwise the MOC Lead advances it manually after the work is done).
 const WORKFLOWS = {
   LEVEL1: [
-    {stage:"FUNCTIONAL_REVIEW", title:"Functional Review", sigs:[
+    {stage:"FUNCTIONAL_REVIEW", title:"Functional Review", status:"REVIEW", sigs:[
       {role:"PROCESS_SAFETY",label:"Process Safety"},
       {role:"RELEVANT_MANAGER",label:"Relevant Manager"}], next:"IMPLEMENTATION", auto:false},
-    {stage:"CLOSEOUT", title:"Close-Out", sigs:[
+    {stage:"CLOSEOUT", title:"Close-Out", status:"CLOSEOUT", sigs:[
       {role:"MOC_LEAD",label:"MOC Lead"},
       {role:"PROCESS_SAFETY",label:"Process Safety"}], next:"CLOSED", auto:false},
   ],
   LEVEL2: [
-    {stage:"APPROVAL_TO_PROCEED", title:"Approval to Proceed", sigs:[
+    {stage:"APPROVAL_TO_PROCEED", title:"Approval to Proceed", status:"REVIEW", sigs:[
       {role:"PRODUCTION_MANAGER",label:"Production Manager"},
       {role:"TECHNICAL_AUTHORITY",label:"Technical Authority"},
       {role:"MAINTENANCE_MANAGER",label:"Maintenance Manager"},
       {role:"EHSS_MANAGER",label:"EHSS Manager"},
       {role:"PROCESS_SAFETY",label:"Process Safety"}], next:"IMPLEMENTATION", auto:false},
-    {stage:"HANDOVER", title:"Handover & Commissioning", sigs:[
+    {stage:"HANDOVER", title:"Handover & Commissioning", status:"HANDOVER", sigs:[
       {role:"PRODUCTION_MANAGER",label:"Production Manager"}], next:"CLOSEOUT", auto:true},
-    {stage:"CLOSEOUT", title:"Close-Out", sigs:[
+    {stage:"CLOSEOUT", title:"Close-Out", status:"CLOSEOUT", sigs:[
       {role:"MOC_LEAD",label:"MOC Lead"},
       {role:"PROCESS_SAFETY",label:"Process Safety"}], next:"CLOSED", auto:false},
   ],
   MOOC: [
-    {stage:"TRANSITION_PLAN", title:"Transition Plan", sigs:[
+    {stage:"TRANSITION_PLAN", title:"Transition Plan", status:"REVIEW", sigs:[
       {role:"MOC_LEAD",label:"MOOC Lead"},
       {role:"RELEVANT_MANAGER",label:"Relevant Manager"}], next:"REVIEW", auto:true},
-    {stage:"FINAL_APPROVAL", title:"Final Approval", sigs:[
+    {stage:"FINAL_APPROVAL", title:"Final Approval", status:"REVIEW", sigs:[
       {role:"SITE_MANAGER",label:"Site Manager"}], next:"IMPLEMENTATION", auto:false},
-    {stage:"CLOSEOUT", title:"Close-Out", sigs:[
+    {stage:"CLOSEOUT", title:"Close-Out", status:"CLOSEOUT", sigs:[
       {role:"MOC_LEAD",label:"MOOC Lead"},
       {role:"PROCESS_SAFETY",label:"Process Safety"}], next:"CLOSED", auto:false},
   ],
   BYPASS: [
-    {stage:"BYPASS_APPROVAL", title:"Bypass Approval", sigs:[
+    {stage:"BYPASS_APPROVAL", title:"Bypass Approval", status:"REVIEW", sigs:[
       {role:"APPROVING_MANAGER",label:"Approving Manager"},
       {role:"MOC_LEAD",label:"MOC Lead"}], next:"ACTIVE", auto:true},
-    {stage:"RESTORATION", title:"Return to Service", sigs:[
+    {stage:"RESTORATION", title:"Return to Service", status:"ACTIVE", sigs:[
       {role:"MOC_LEAD",label:"MOC Lead"}], next:"CLOSED", auto:false},
   ],
+};
+
+// Checklist templates per form type (transcribed/condensed from the paper forms).
+const CHECKLISTS = {
+  LEVEL1: [
+    {kind:"FUNCTIONAL_REVIEW", title:"Appendix A — Functional Review Checklist", items:[
+      {key:"fr-hazards", label:"Have the hazards of the change been considered and documented (flow, pressure, temperature deviations)?"},
+      {key:"fr-inspection", label:"Have inspection requirements been reviewed by the relevant engineer?"},
+      {key:"fr-supervision", label:"Will the change be executed under supervision of experienced Vantage personnel?"},
+      {key:"fr-fire", label:"Is there a fire hazard during field work, and are adequate measures in place?"},
+      {key:"fr-pssr", label:"PSSR required (input from Process Safety Engineer)?"},
+    ]},
+    {kind:"CLOSEOUT", title:"Part 2 — Close-Out Checklist", items:[
+      {key:"co-job", label:"Job completed?"},
+      {key:"co-pssr", label:"PSSR completed?"},
+      {key:"co-psi", label:"PSI & Equipment File updated?"},
+      {key:"co-punch", label:"All punch list recommendations closed?"},
+      {key:"co-ldar", label:"LDAR updated?"},
+    ]},
+  ],
+  LEVEL2: [
+    {kind:"SE_ASSESSMENT", title:"Appendix A — Safety & Environmental Assessment", items:[
+      {key:"se-design", label:"Design changes (flow, pressure, temperature, materials, controls) assessed?"},
+      {key:"se-hazards", label:"New SSHE hazards identified and assessed?"},
+      {key:"se-safeguards", label:"Existing safeguards affected / new safeguards required identified?"},
+      {key:"se-environment", label:"Environmental aspects (emissions, effluent, waste, permits) assessed?"},
+      {key:"se-procedures", label:"Impact on procedures, permits & regulations (Air, NPDES, RMP, PSM) assessed?"},
+    ]},
+    {kind:"DOC_CHECKLIST", title:"Appendix B — Documentation Checklist", items:[
+      {key:"doc-pid", label:"P&IDs updated"},
+      {key:"doc-datasheets", label:"Equipment & instrument data sheets"},
+      {key:"doc-hazard", label:"Hazard review / PHA"},
+      {key:"doc-sops", label:"SOPs updated"},
+      {key:"doc-pssr", label:"PSSR"},
+      {key:"doc-training", label:"Training / notification completed & documented"},
+      {key:"doc-relief", label:"Master equipment / relief valve list updated"},
+    ]},
+  ],
+  MOOC: [
+    {kind:"TRANSITION_PLAN", title:"Appendix A — Transition Plan", items:[
+      {key:"tp-permits", label:"Update environmental permitting / agency designations"},
+      {key:"tp-erp", label:"Update Emergency Response Plan"},
+      {key:"tp-mocs", label:"Reassign MOCs and MOC actions"},
+      {key:"tp-pha", label:"Reassign PHA action items"},
+      {key:"tp-hr", label:"Update reporting hierarchy in HR system"},
+    ]},
+  ],
+  BYPASS: [],
 };
 
 const USERS = [
@@ -294,6 +357,14 @@ function seed(){
     form:{asset:"P-204", plantArea:"Tank Farm", summary:"Add a redundant transfer pump in parallel with P-204A.",
       technicalBasis:"Single pump is a production bottleneck and a single point of failure. Parallel spare with isolation valves; no change to fluid, pressure, or temperature envelope.",
       phaType:"WHAT_IF", phaJustification:"Level 3 — What-If review of tie-in and isolation."},
+    checklist:{
+      "SE_ASSESSMENT|se-design":{answer:"YES",remarks:"Parallel pump; no envelope change"},
+      "SE_ASSESSMENT|se-hazards":{answer:"YES",remarks:"Caustic exposure during tie-in"},
+      "SE_ASSESSMENT|se-safeguards":{answer:"YES",remarks:"Double block & bleed + LOTO"},
+      "DOC_CHECKLIST|doc-pid":{answer:"NO",remarks:"Markup in progress"},
+      "DOC_CHECKLIST|doc-hazard":{answer:"YES"},
+    },
+    actions:[{id:"a-seed1",description:"Confirm tie-in isolation valve spec with TA",ownerId:"u-terry",due:plus(7),status:"OPEN"}],
     openStage:"APPROVAL_TO_PROCEED",
   }));
   // 2) Level 1 CLOSED
@@ -303,6 +374,16 @@ function seed(){
     relevantManagerId:"u-pat",
     form:{asset:"Drum Fill", plantArea:"Packaging", summary:"Move eyewash 4 m to within 10 s of the fill point.",
       technicalBasis:"Improves emergency access per ANSI Z358.1.", safetyEnvImpact:"Positive — faster access; no new hazards."},
+    checklist:{
+      "FUNCTIONAL_REVIEW|fr-hazards":{answer:"YES"},
+      "FUNCTIONAL_REVIEW|fr-inspection":{answer:"YES"},
+      "FUNCTIONAL_REVIEW|fr-supervision":{answer:"YES"},
+      "FUNCTIONAL_REVIEW|fr-fire":{answer:"NA"},
+      "FUNCTIONAL_REVIEW|fr-pssr":{answer:"NO",remarks:"No new equipment"},
+      "CLOSEOUT|co-job":{answer:"YES"}, "CLOSEOUT|co-pssr":{answer:"NA"},
+      "CLOSEOUT|co-psi":{answer:"YES"}, "CLOSEOUT|co-punch":{answer:"YES"}, "CLOSEOUT|co-ldar":{answer:"NA"},
+    },
+    actions:[{id:"a-seed2",description:"Update area emergency map with new eyewash location",ownerId:"u-jamie",due:plus(-10),status:"CLOSED"}],
     closed:true,
   }));
   // 3) Temporary, overdue
@@ -312,6 +393,8 @@ function seed(){
     deg:"LOW", sig:"HIGH",
     form:{asset:"E-310", plantArea:"Reaction", summary:"Temporary jumper to keep line in service during exchanger clean.",
       technicalBasis:"Maintains production during scheduled clean; restored after.", phaType:"NONE"},
+    checklist:{ "DOC_CHECKLIST|doc-pid":{answer:"YES"}, "DOC_CHECKLIST|doc-sops":{answer:"NO",remarks:"Temp SOP pending"} },
+    actions:[{id:"a-seed3",description:"Remove temporary jumper and restore line to original configuration",ownerId:"u-jamie",due:plus(-1),status:"OPEN"}],
     approvedThrough:"APPROVAL_TO_PROCEED",
   }));
   // 4) Bypass ACTIVE
@@ -326,6 +409,7 @@ function seed(){
       reason:"Transmitter failed; swap requires interlock offline ~6 h.",
       alternateProtection:"Dedicated operator stationed at local level gauge with radio; filling rate reduced 50%; supervisor notified.",
       implementerName:"Jamie Chen"},
+    actions:[{id:"a-seed4",description:"Verify transmitter calibration after swap before restoring interlock",ownerId:"u-jamie",due:plus(1),status:"OPEN"}],
     approvedThrough:"BYPASS_APPROVAL",
   }));
 
@@ -339,7 +423,8 @@ function makeMoc(o){
     status:"DRAFT", changeType:o.changeType||"PERMANENT", startDate:o.startDate||null,
     endDate:o.endDate||null, deg:o.deg||null, sig:o.sig||null, form:o.form||{},
     relevantManagerId:o.relevantManagerId||null, approvingManagerId:o.approvingManagerId||null,
-    approvals:[], audit:[], createdAt:new Date().toISOString(),
+    approvals:[], checklist:o.checklist||{}, actions:o.actions||[],
+    audit:[], createdAt:new Date().toISOString(),
   };
   addAudit(m,"u-jamie","MOC created", m.number);
   // Build approval history to reach the requested state
@@ -398,6 +483,7 @@ function openStageOn(m, st){
       decision:"PENDING", signedName:null, comment:null, at:null,
     });
   }
+  if(st.status) m.status = st.status;
 }
 function resolveAssignee(m, role){
   if(role==="MOC_LEAD") return m.leadId;
@@ -421,6 +507,7 @@ function resetDemo(){ localStorage.removeItem(LS_KEY); DB = load(); CURRENT="u-j
 // =====================================================================
 let CURRENT = "u-jamie";   // acting persona
 let ROUTE = {name:"dashboard"};
+let EDIT_SCOPE = false;    // toggles the scope card into an editable form
 
 function go(name, params){ ROUTE = {name, ...(params||{})}; window.scrollTo(0,0); render(); }
 
@@ -553,38 +640,42 @@ function viewNew(){
 
   const showScope = NEW.kind!=="CHANGE" || lvl;
   if(showScope){
+    const v = n => esc(NEW[n]||"");
+    const phaSel = NEW.phaType || (lvl>=4?"HAZOP":lvl>=3?"WHAT_IF":"NONE");
     h += `<div class="card"><div class="chead"><h2>Scope</h2></div><div class="cbody">`;
-    h += `<label class="fld"><span>${NEW.kind==="MOOC"?"MOOC":"MOC"} Title</span><input type="text" name="title" required></label>`;
+    h += `<label class="fld"><span>${NEW.kind==="MOOC"?"MOOC":"MOC"} Title</span><input type="text" name="title" value="${v('title')}" required></label>`;
     h += `<label class="fld"><span>Permanent or temporary?</span>
       <div class="toggle" data-grp="ct">
         <button type="button" data-v="PERMANENT" class="${NEW.changeType==="PERMANENT"?"on":""}">Permanent</button>
         <button type="button" data-v="TEMPORARY" class="${NEW.changeType==="TEMPORARY"?"on":""}">Temporary</button></div></label>`;
     if(NEW.changeType==="TEMPORARY")
-      h += `<label class="fld"><span>End date (required for temporary changes)</span><input type="date" name="endDate" required></label>`;
+      h += `<label class="fld"><span>End date (required for temporary changes)</span><input type="date" name="endDate" value="${v('endDate')}" required></label>`;
 
     if(NEW.kind==="CHANGE"){
       h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-        <label class="fld"><span>Asset</span><input type="text" name="asset"></label>
-        <label class="fld"><span>Plant area</span><input type="text" name="plantArea"></label></div>
-        <label class="fld"><span>Brief summary of the modification</span><textarea name="summary" rows="3" required></textarea></label>
+        <label class="fld"><span>Asset</span><input type="text" name="asset" value="${v('asset')}"></label>
+        <label class="fld"><span>Plant area</span><input type="text" name="plantArea" value="${v('plantArea')}"></label></div>
+        <label class="fld"><span>Brief summary of the modification</span><textarea name="summary" rows="3" required>${v('summary')}</textarea></label>
         <label class="fld"><span>Technical basis for change</span>
           <span class="hint">What is changing and how? What will it achieve? Is it safe to make and why?</span>
-          <textarea name="technicalBasis" rows="3" required></textarea></label>`;
+          <textarea name="technicalBasis" rows="3" required>${v('technicalBasis')}</textarea></label>`;
       if(lvl>=2)
         h += `<label class="fld"><span>Process Hazard Review (Part 1C)</span>
           <span class="hint">${lvl===3?"Level 3 requires at least a What-If review.":lvl===4?"Level 4 requires a HAZOP.":""}</span>
           <select class="fi" name="phaType">
-            <option value="NONE">None Required</option><option value="WHAT_IF" ${lvl>=3?"selected":""}>What-If Review</option>
-            <option value="HAZOP" ${lvl===4?"selected":""}>HAZOP</option><option value="LOPA">LOPA</option></select></label>`;
+            <option value="NONE" ${phaSel==="NONE"?"selected":""}>None Required</option>
+            <option value="WHAT_IF" ${phaSel==="WHAT_IF"?"selected":""}>What-If Review</option>
+            <option value="HAZOP" ${phaSel==="HAZOP"?"selected":""}>HAZOP</option>
+            <option value="LOPA" ${phaSel==="LOPA"?"selected":""}>LOPA</option></select></label>`;
     }
     if(NEW.kind==="MOOC"){
-      h += `<label class="fld"><span>Job title affected</span><input type="text" name="jobTitle" required></label>
-        <label class="fld"><span>Job description</span><textarea name="jobDescription" rows="3" required></textarea></label>`;
+      h += `<label class="fld"><span>Job title affected</span><input type="text" name="jobTitle" value="${v('jobTitle')}" required></label>
+        <label class="fld"><span>Job description</span><textarea name="jobDescription" rows="3" required>${v('jobDescription')}</textarea></label>`;
     }
     if(NEW.kind==="BYPASS"){
-      h += `<label class="fld"><span>Bypassed safety device ID &amp; description</span><textarea name="deviceDescription" rows="2" required></textarea></label>
-        <label class="fld"><span>Hazard the device protects against</span><span class="hint">Reference the PHA when possible.</span><textarea name="hazardExplanation" rows="2" required></textarea></label>
-        <label class="fld"><span>Alternate protection plan</span><textarea name="alternateProtection" rows="2" required></textarea></label>`;
+      h += `<label class="fld"><span>Bypassed safety device ID &amp; description</span><textarea name="deviceDescription" rows="2" required>${v('deviceDescription')}</textarea></label>
+        <label class="fld"><span>Hazard the device protects against</span><span class="hint">Reference the PHA when possible.</span><textarea name="hazardExplanation" rows="2" required>${v('hazardExplanation')}</textarea></label>
+        <label class="fld"><span>Alternate protection plan</span><textarea name="alternateProtection" rows="2" required>${v('alternateProtection')}</textarea></label>`;
     }
     h += `<button class="btn" type="submit">Create draft</button></div></div>`;
   }
@@ -636,28 +727,51 @@ function viewMoc(id){
     h += `<button class="btn" type="submit">Submit for approval</button></form></div></div>`;
   }
 
+  // issue 2: implementation in progress — advance to the next stage (incl. close-out)
+  const nextManual = m.status==="IMPLEMENTATION"
+    ? wf.find(s=>!m.approvals.some(a=>a.stage===s.stage)) : null;
+  if(nextManual && isLead){
+    h += `<div class="card"><div class="chead"><h2>Change approved — implementation in progress</h2>
+      <p class="muted">When the work is complete, advance the MOC to the next stage.</p></div><div class="cbody">
+      <button class="btn blue" data-advance="${m.id}">Mark implementation complete → ${esc(nextManual.title)}</button></div></div>`;
+  } else if(m.status==="IMPLEMENTATION" && !isLead){
+    h += `<div class="banner note">This change is approved and in progress. The MOC Lead (${esc(userById(m.leadId)?.name)}) advances it to the next stage when the work is complete — switch to that persona to continue.</div>`;
+  }
+
   h += `<div class="grid2"><div>`;
 
-  // scope card
-  h += `<div class="card"><div class="chead"><h2>Scope</h2></div><div class="cbody">`;
-  h += `<dl class="kv">`;
-  if(m.type==="LEVEL1"||m.type==="LEVEL2"){
-    h += `<div><dt>Asset</dt><dd>${esc(f.asset||"—")}</dd></div><div><dt>Plant area</dt><dd>${esc(f.plantArea||"—")}</dd></div>`;
-    h += `<div><dt>Hazard assessment</dt><dd>${esc(m.deg)} hazard × ${esc(m.sig)} significance → <b>Level ${m.level}</b></dd></div>`;
+  // scope card — editable during draft/rejected/review (issue 1)
+  const canEditScope = ["DRAFT","REJECTED","REVIEW"].includes(m.status);
+  h += `<div class="card"><div class="chead" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>Scope</h2>`;
+  if(canEditScope && !EDIT_SCOPE) h += `<a data-editscope="${m.id}">Edit description</a>`;
+  h += `</div><div class="cbody">`;
+  if(EDIT_SCOPE && canEditScope){
+    if(m.status==="REVIEW") h += `<div class="banner note">Editing during review — the pending approvers should re-check before signing.</div>`;
+    h += scopeEditForm(m);
+  } else {
+    h += `<dl class="kv">`;
+    if(m.type==="LEVEL1"||m.type==="LEVEL2"){
+      h += `<div><dt>Asset</dt><dd>${esc(f.asset||"—")}</dd></div><div><dt>Plant area</dt><dd>${esc(f.plantArea||"—")}</dd></div>`;
+      h += `<div><dt>Hazard assessment</dt><dd>${esc(m.deg)} hazard × ${esc(m.sig)} significance → <b>Level ${m.level}</b></dd></div>`;
+    }
+    h += `<div><dt>Type</dt><dd>${m.changeType==="TEMPORARY"?"Temporary (ends "+fmtDate(m.endDate)+")":"Permanent"}</dd></div></dl>`;
+    if(m.type==="LEVEL1"||m.type==="LEVEL2"){
+      h += `<div class="section-h">Brief summary</div><div>${esc(f.summary||"—")}</div>
+        <div class="section-h">Technical basis for change</div><div>${esc(f.technicalBasis||"—")}</div>`;
+      if(m.type==="LEVEL1") h += `<div class="section-h">Impact on safety & environment</div><div>${esc(f.safetyEnvImpact||"—")}</div>`;
+      if(m.type==="LEVEL2") h += `<div class="section-h">Process Hazard Review</div><div>${esc(f.phaType||"—")}${f.phaJustification?" — "+esc(f.phaJustification):""}</div>`;
+    }
+    if(m.type==="MOOC") h += `<div class="section-h">Job title</div><div>${esc(f.jobTitle||"—")}</div>
+      <div class="section-h">Job description</div><div>${esc(f.jobDescription||"—")}</div>`;
+    if(m.type==="BYPASS") h += `<div class="section-h">Bypassed device</div><div>${esc(f.deviceDescription||"—")}</div>
+      <div class="section-h">Hazard protected against</div><div>${esc(f.hazardExplanation||"—")}</div>
+      <div class="section-h">Alternate protection plan</div><div>${esc(f.alternateProtection||"—")}</div>`;
   }
-  h += `<div><dt>Type</dt><dd>${m.changeType==="TEMPORARY"?"Temporary (ends "+fmtDate(m.endDate)+")":"Permanent"}</dd></div></dl>`;
-  if(m.type==="LEVEL1"||m.type==="LEVEL2"){
-    h += `<div class="section-h">Brief summary</div><div>${esc(f.summary||"—")}</div>
-      <div class="section-h">Technical basis for change</div><div>${esc(f.technicalBasis||"—")}</div>`;
-    if(m.type==="LEVEL1") h += `<div class="section-h">Impact on safety & environment</div><div>${esc(f.safetyEnvImpact||"—")}</div>`;
-    if(m.type==="LEVEL2") h += `<div class="section-h">Process Hazard Review</div><div>${esc(f.phaType||"—")}${f.phaJustification?" — "+esc(f.phaJustification):""}</div>`;
-  }
-  if(m.type==="MOOC") h += `<div class="section-h">Job title</div><div>${esc(f.jobTitle||"—")}</div>
-    <div class="section-h">Job description</div><div>${esc(f.jobDescription||"—")}</div>`;
-  if(m.type==="BYPASS") h += `<div class="section-h">Bypassed device</div><div>${esc(f.deviceDescription||"—")}</div>
-    <div class="section-h">Hazard protected against</div><div>${esc(f.hazardExplanation||"—")}</div>
-    <div class="section-h">Alternate protection plan</div><div>${esc(f.alternateProtection||"—")}</div>`;
   h += `</div></div>`;
+
+  // checklists + action items (issue 4)
+  (CHECKLISTS[m.type]||[]).forEach(def=>{ h += checklistCard(m, def, open); });
+  h += actionsCard(m, open);
 
   // audit
   h += `<div class="card"><div class="chead"><h2>Audit Trail</h2></div><div class="cbody">`;
@@ -707,7 +821,13 @@ function viewHelp(){
     <tr><td style="text-align:left"><b>HIGH degree of hazard</b></td><td class="lv3">Level 3</td><td class="lv4">Level 4</td></tr></tbody></table>
     <p class="muted" style="margin-top:8px">Level 3 requires a What-If PHA; Level 4 requires a HAZOP.</p></div></div>
   <div class="card"><div class="chead"><h2>Trying the demo</h2></div><div class="cbody">
-    <p>Use the <b>Acting as</b> picker (top right) to switch between people. Create an MOC as Jamie Chen, submit it, then switch to the assigned approver to sign it — watch the workflow advance. Everything is sample data in your browser; use <b>Reset demo data</b> (top bar) to start over.</p></div></div>`;
+    <p>Use the <b>Acting as</b> picker (top right) to switch between people. A typical run:</p>
+    <ol style="margin:6px 0 0;padding-left:20px">
+      <li>As <b>Jamie Chen</b>, create an MOC, fill the checklists, add punch-list action items, and submit it.</li>
+      <li>Switch to each assigned approver and <b>Review &amp; Sign</b>. An approver can also use <b>Edit description</b> while it is in review.</li>
+      <li>Once approved, the lead clicks <b>Mark implementation complete</b> to move it through commissioning to close-out.</li>
+    </ol>
+    <p style="margin-top:8px">Everything is sample data in your browser; use <b>Reset demo data</b> (top bar) to start over.</p></div></div>`;
 }
 
 // =====================================================================
@@ -730,28 +850,44 @@ function render(){
 
 // global click handling (delegation)
 document.addEventListener("click", e=>{
-  const t = e.target.closest("[data-go],[data-moc],[data-kind],[data-newback],[data-sign],[data-v],[data-grp]");
   if(e.target.id==="resetLink"){ if(confirm("Reset all demo data?")) resetDemo(); return; }
+  const t = e.target.closest("[data-go],[data-moc],[data-kind],[data-newback],[data-sign],[data-v],[data-grp],[data-editscope],[data-canceledit],[data-advance],[data-actoggle],[data-cl]");
   if(!t) return;
 
   if(t.hasAttribute("data-sign")){ openSignDialog(t.getAttribute("data-sign"), t.getAttribute("data-moc")); return; }
-  if(t.hasAttribute("data-moc") && !t.hasAttribute("data-sign")){ go("moc",{id:t.getAttribute("data-moc")}); return; }
-  if(t.hasAttribute("data-go")){ if(t.getAttribute("data-go")==="new"){ NEW.kind=null; NEW.deg=""; NEW.sig=""; NEW.changeType="PERMANENT"; } go(t.getAttribute("data-go")); return; }
+  if(t.hasAttribute("data-cl")){ setChecklist(t.getAttribute("data-mid"), t.getAttribute("data-kind"), t.getAttribute("data-key"), {answer:t.getAttribute("data-ans")}); return; }
+  if(t.hasAttribute("data-actoggle")){ toggleAction(t.getAttribute("data-mid"), t.getAttribute("data-actoggle")); return; }
+  if(t.hasAttribute("data-advance")){ advanceStage(t.getAttribute("data-advance")); return; }
+  if(t.hasAttribute("data-editscope")){ EDIT_SCOPE=true; render(); return; }
+  if(t.hasAttribute("data-canceledit")){ EDIT_SCOPE=false; render(); return; }
+  if(t.hasAttribute("data-moc")){ EDIT_SCOPE=false; go("moc",{id:t.getAttribute("data-moc")}); return; }
+  if(t.hasAttribute("data-go")){ EDIT_SCOPE=false; if(t.getAttribute("data-go")==="new"){ resetNew(); } go(t.getAttribute("data-go")); return; }
   if(t.hasAttribute("data-kind")){ NEW.kind=t.getAttribute("data-kind"); render(); return; }
   if(t.hasAttribute("data-newback")){ NEW.kind=null; render(); return; }
   if(t.closest("[data-grp]")){
+    captureNewForm(); // issue 3: keep typed values when a toggle re-renders the form
     const grp = t.closest("[data-grp]").getAttribute("data-grp"); const v=t.getAttribute("data-v");
     if(grp==="deg") NEW.deg=v; if(grp==="sig") NEW.sig=v; if(grp==="ct") NEW.changeType=v;
     render(); return;
   }
 });
 
-document.getElementById("personaSel").addEventListener("change", e=>{ CURRENT=e.target.value; render(); });
+document.getElementById("personaSel").addEventListener("change", e=>{ CURRENT=e.target.value; EDIT_SCOPE=false; render(); });
 
-// form submit (new MOC + submit-for-approval)
+// form submit (new MOC, submit-for-approval, edit scope, add action item)
 document.addEventListener("submit", e=>{
   if(e.target.id==="mocForm"){ e.preventDefault(); createMoc(new FormData(e.target)); }
   if(e.target.id==="submitForm"){ e.preventDefault(); submitForApproval(ROUTE.id, new FormData(e.target)); }
+  if(e.target.id==="scopeForm"){ e.preventDefault(); saveScope(e.target.getAttribute("data-mid"), new FormData(e.target)); }
+  if(e.target.id==="actionForm"){ e.preventDefault(); addActionItem(e.target.getAttribute("data-mid"), new FormData(e.target)); }
+});
+
+// checklist remarks save on change/blur (issue 4)
+document.addEventListener("change", e=>{
+  const el = e.target;
+  if(el && el.getAttribute && el.getAttribute("data-clr")){
+    setChecklist(el.getAttribute("data-mid"), el.getAttribute("data-kind"), el.getAttribute("data-key"), {remarks:el.value});
+  }
 });
 
 function createMoc(fd){
@@ -769,10 +905,11 @@ function createMoc(fd){
     title: fd.get("title"), leadId: CURRENT, status:"DRAFT",
     changeType: NEW.changeType, startDate:null, endDate: fd.get("endDate")||null,
     deg: kind==="CHANGE"?NEW.deg:null, sig: kind==="CHANGE"?NEW.sig:null,
-    form, relevantManagerId:null, approvingManagerId:null, approvals:[], audit:[], createdAt:new Date().toISOString(),
+    form, relevantManagerId:null, approvingManagerId:null,
+    approvals:[], checklist:{}, actions:[], audit:[], createdAt:new Date().toISOString(),
   };
   addAudit(m, CURRENT, "MOC created", number);
-  DB.mocs.unshift(m); save();
+  DB.mocs.unshift(m); resetNew(); save();
   go("moc",{id:m.id});
 }
 
@@ -789,6 +926,135 @@ function submitForApproval(id, fd){
   m.status = "REVIEW";
   addAudit(m, CURRENT, "Submitted for approval");
   save(); go("moc",{id});
+}
+
+// ---- issue 2: advance an implemented change to its next stage ----
+function advanceStage(mocId){
+  const m = DB.mocs.find(x=>x.id===mocId); if(!m) return;
+  const wf = WORKFLOWS[m.type];
+  const next = wf.find(s=>!m.approvals.some(a=>a.stage===s.stage)); // first un-opened stage
+  if(!next) return;
+  openStageOn(m, next); // sets m.status to next.status
+  addAudit(m, CURRENT, "Advanced to: "+next.title);
+  save(); go("moc",{id:mocId});
+}
+
+// ---- issue 4: checklists & action items ----
+function checklistCard(m, def, editable){
+  let h = `<div class="card"><div class="chead"><h2>${esc(def.title)}</h2></div><div class="cbody"><table class="cl"><tbody>`;
+  def.items.forEach(it=>{
+    const cur = m.checklist[def.kind+"|"+it.key] || {};
+    h += `<tr><td class="cl-l">${esc(it.label)}</td><td class="cl-a">`;
+    ["YES","NO","NA"].forEach(o=>{
+      const on = cur.answer===o ? "on "+(o==="NO"?"no":"") : "";
+      const lbl = o==="NA"?"N/A":o[0]+o.slice(1).toLowerCase();
+      h += editable
+        ? `<button class="clbtn ${on}" data-cl="1" data-mid="${m.id}" data-kind="${def.kind}" data-key="${it.key}" data-ans="${o}">${lbl}</button>`
+        : `<span class="clbtn ${on}" style="cursor:default">${lbl}</span>`;
+    });
+    h += `</td><td class="cl-r">`;
+    h += editable
+      ? `<input type="text" placeholder="Remarks" value="${esc(cur.remarks||"")}" data-clr="1" data-mid="${m.id}" data-kind="${def.kind}" data-key="${it.key}">`
+      : `<span class="muted">${esc(cur.remarks||"")}</span>`;
+    h += `</td></tr>`;
+  });
+  return h + `</tbody></table></div></div>`;
+}
+
+function actionsCard(m, editable){
+  let h = `<div class="card"><div class="chead"><h2>Action Items / Punch List</h2><p class="muted">PSSR categories: A pre-inventory · B hot commissioning · C pre-closure</p></div><div class="cbody">`;
+  if(!m.actions.length) h += `<p class="muted">No action items yet.</p>`;
+  else {
+    h += `<table><thead><tr><th>Item</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>`;
+    m.actions.forEach(a=>{
+      h += `<tr><td class="${a.status==='CLOSED'?'muted':''}">${esc(a.description)}</td>
+        <td>${esc(userById(a.ownerId)?.name||"—")}</td><td>${esc(a.due||"—")}</td>
+        <td>${a.status==="CLOSED"?'<span class="ok">Closed</span>':'<span class="pend">Open</span>'}</td>
+        <td style="text-align:right">${editable?`<a data-actoggle="${a.id}" data-mid="${m.id}">${a.status==="OPEN"?"Close":"Reopen"}</a>`:""}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+  }
+  if(editable){
+    h += `<form id="actionForm" data-mid="${m.id}" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" name="description" placeholder="New action item…" style="flex:1;min-width:180px">
+      <select class="fi" name="ownerId" style="width:auto"><option value="">Owner…</option>${USERS.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join("")}</select>
+      <input type="date" name="due" style="width:auto">
+      <button class="btn sm" type="submit">Add</button></form>`;
+  }
+  return h + `</div></div>`;
+}
+
+function setChecklist(mid, kind, key, patch){
+  const m = DB.mocs.find(x=>x.id===mid); if(!m) return;
+  const k = kind+"|"+key;
+  m.checklist[k] = { ...(m.checklist[k]||{}), ...patch };
+  save(); render();
+}
+function addActionItem(mid, fd){
+  const m = DB.mocs.find(x=>x.id===mid); if(!m) return;
+  const description = (fd.get("description")||"").trim();
+  if(!description){ alert("Describe the action item."); return; }
+  m.actions.push({ id:"a-"+Math.random().toString(36).slice(2,9), description,
+    ownerId: fd.get("ownerId")||null, due: fd.get("due")||null, status:"OPEN" });
+  addAudit(m, CURRENT, "Action item added", description);
+  save(); render();
+}
+function toggleAction(mid, actId){
+  const m = DB.mocs.find(x=>x.id===mid); if(!m) return;
+  const a = m.actions.find(x=>x.id===actId); if(!a) return;
+  a.status = a.status==="OPEN" ? "CLOSED" : "OPEN";
+  addAudit(m, CURRENT, "Action item "+(a.status==="CLOSED"?"closed":"reopened"), a.description);
+  save(); render();
+}
+
+// ---- issue 1: edit the description/scope (incl. during review) ----
+function scopeEditForm(m){
+  const f = m.form; const v = n => esc(f[n]||"");
+  let h = `<form id="scopeForm" data-mid="${m.id}">`;
+  h += `<label class="fld"><span>Title</span><input type="text" name="title" value="${esc(m.title)}" required></label>`;
+  if(m.type==="LEVEL1"||m.type==="LEVEL2"){
+    h += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <label class="fld"><span>Asset</span><input type="text" name="asset" value="${v('asset')}"></label>
+      <label class="fld"><span>Plant area</span><input type="text" name="plantArea" value="${v('plantArea')}"></label></div>
+      <label class="fld"><span>Brief summary</span><textarea name="summary" rows="3">${v('summary')}</textarea></label>
+      <label class="fld"><span>Technical basis for change</span><textarea name="technicalBasis" rows="3">${v('technicalBasis')}</textarea></label>`;
+    if(m.type==="LEVEL1") h += `<label class="fld"><span>Impact on safety &amp; environment</span><textarea name="safetyEnvImpact" rows="2">${v('safetyEnvImpact')}</textarea></label>`;
+    if(m.type==="LEVEL2") h += `<label class="fld"><span>Process Hazard Review — justification</span><input type="text" name="phaJustification" value="${v('phaJustification')}"></label>`;
+  }
+  if(m.type==="MOOC"){
+    h += `<label class="fld"><span>Job title</span><input type="text" name="jobTitle" value="${v('jobTitle')}"></label>
+      <label class="fld"><span>Job description</span><textarea name="jobDescription" rows="3">${v('jobDescription')}</textarea></label>`;
+  }
+  if(m.type==="BYPASS"){
+    h += `<label class="fld"><span>Bypassed device</span><textarea name="deviceDescription" rows="2">${v('deviceDescription')}</textarea></label>
+      <label class="fld"><span>Hazard protected against</span><textarea name="hazardExplanation" rows="2">${v('hazardExplanation')}</textarea></label>
+      <label class="fld"><span>Alternate protection plan</span><textarea name="alternateProtection" rows="2">${v('alternateProtection')}</textarea></label>`;
+  }
+  return h + `<div style="display:flex;gap:8px"><button class="btn sm" type="submit">Save description</button>
+    <button type="button" class="btn ghost sm" data-canceledit="1">Cancel</button></div></form>`;
+}
+function saveScope(mid, fd){
+  const m = DB.mocs.find(x=>x.id===mid); if(!m) return;
+  const title = (fd.get("title")||"").trim();
+  if(!title){ alert("Title is required."); return; }
+  m.title = title;
+  ["asset","plantArea","summary","technicalBasis","safetyEnvImpact","phaJustification",
+   "jobTitle","jobDescription","deviceDescription","hazardExplanation","alternateProtection"]
+    .forEach(k=>{ if(fd.get(k)!=null) m.form[k]=fd.get(k); });
+  addAudit(m, CURRENT, m.status==="REVIEW" ? "Description edited during review" : "Description edited");
+  EDIT_SCOPE = false; save(); go("moc",{id:mid});
+}
+
+// ---- issue 3: keep New-MOC form inputs across re-renders ----
+const NEW_FIELDS = ["title","endDate","asset","plantArea","summary","technicalBasis",
+  "phaType","jobTitle","jobDescription","deviceDescription","hazardExplanation","alternateProtection"];
+function captureNewForm(){
+  const f = document.getElementById("mocForm"); if(!f) return;
+  NEW_FIELDS.forEach(n=>{ const el=f.elements[n]; if(el!=null && el.value!=null) NEW[n]=el.value; });
+}
+function resetNew(){
+  NEW_FIELDS.forEach(n=>delete NEW[n]);
+  NEW.kind=null; NEW.deg=""; NEW.sig=""; NEW.changeType="PERMANENT";
 }
 
 // ---- signature dialog ----
@@ -849,20 +1115,14 @@ function applySignature(mocId, approvalId, decision, name, comment){
   if(rows.every(x=>x.decision==="APPROVED")){
     m.status = st.next;
     addAudit(m, CURRENT, "Stage complete: "+st.title);
-    if(st.next==="CLOSED") m.closedAt=new Date().toISOString();
-    // auto-open next stage where configured (and always open next for linear demo clarity)
-    const idx = wf.indexOf(st);
-    const nx = wf[idx+1];
-    if(nx && (st.auto || true) && st.next!=="CLOSED"){
-      // For non-auto stages there is normally real-world work in between; in the
-      // demo we open the next stage immediately so the flow is easy to follow.
-      openStageOn(m, nx);
-      m.status = nx.status || m.status;
-      // keep status meaningful: if next stage status undefined, set to its first
-      if(nx.stage==="CLOSEOUT") m.status="CLOSEOUT";
-      if(nx.stage==="HANDOVER") m.status="HANDOVER";
-      if(nx.stage==="FINAL_APPROVAL") m.status="REVIEW";
-      if(nx.stage==="RESTORATION") m.status="ACTIVE";
+    if(st.next==="CLOSED"){
+      m.closedAt = new Date().toISOString();
+    } else if(st.auto){
+      // Auto-advance stages (e.g. bypass → return-to-service, handover → close-out)
+      // open immediately. Non-auto stages wait for the lead to advance after the
+      // real-world work, via the "Mark implementation complete" action.
+      const nx = wf[wf.indexOf(st)+1];
+      if(nx) openStageOn(m, nx); // sets m.status to nx.status
     }
   }
   save(); go("moc",{id:mocId});

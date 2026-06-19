@@ -172,14 +172,24 @@ export async function createMocAction(
 }
 
 async function getEditableMoc(mocId: string, userId: string) {
-  const moc = await prisma.moc.findUnique({ where: { id: mocId } });
+  const moc = await prisma.moc.findUnique({
+    where: { id: mocId },
+    include: { approvals: true },
+  });
   if (!moc) throw new Error("MOC not found");
   const user = await requireUser();
-  const canEdit =
-    (moc.leadId === userId || moc.createdById === userId || user.isAdmin) &&
-    ["DRAFT", "REJECTED"].includes(moc.status);
-  if (!canEdit) throw new Error("This record can no longer be edited.");
-  return moc;
+  const isOwner = moc.leadId === userId || moc.createdById === userId || user.isAdmin;
+  // Drafts (and rejected records) are fully editable by the lead/creator/admin.
+  if (isOwner && ["DRAFT", "REJECTED"].includes(moc.status)) return moc;
+  // During review the lead, an admin, or an assigned approver may revise the
+  // descriptive scope — e.g. clarify wording an approver has flagged — without
+  // resetting the in-progress signatures. Structural fields (type, level,
+  // hazard assessment) remain fixed.
+  const isApprover = moc.approvals.some(
+    (a) => a.assignedToId === userId && a.decision === "PENDING"
+  );
+  if ((isOwner || isApprover) && moc.status === "REVIEW") return moc;
+  throw new Error("This record can no longer be edited.");
 }
 
 export async function updateMocAction(
@@ -212,7 +222,22 @@ export async function updateMocAction(
       formData: collectFormData(moc.type as MocType, form),
     },
   });
-  await audit("MOC updated", { mocId, userId: user.id });
+
+  if (moc.status === "REVIEW") {
+    await audit("Scope edited during review", { mocId, userId: user.id });
+    // Let the pending approvers know the description changed under them.
+    const pending = await prisma.approval.findMany({
+      where: { mocId, decision: "PENDING" },
+      select: { assignedToId: true },
+    });
+    await notifyMany(
+      pending.map((p) => p.assignedToId).filter((x): x is string => !!x && x !== user.id),
+      `${moc.number} "${title}" had its description updated during review — please re-check before signing.`,
+      { mocId, link: `/mocs/${mocId}` }
+    );
+  } else {
+    await audit("MOC updated", { mocId, userId: user.id });
+  }
   redirect(`/mocs/${mocId}`);
 }
 
