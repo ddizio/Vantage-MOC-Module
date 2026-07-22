@@ -1,0 +1,30 @@
+services:
+  moc:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/app/data/moc.db"
+      # REQUIRED — generate with: openssl rand -hex 32
+      SESSION_SECRET: "${SESSION_SECRET:?Set SESSION_SECRET in .env}"
+      # First administrator, created on first start only
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@vantage.local}"
+      ADMIN_NAME: "${ADMIN_NAME:-MOC Administrator}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}"
+      SITE_CODE: "${SITE_CODE:-GUR}"
+      SITE_NAME: "${SITE_NAME:-Gurnee}"
+      # Optional email notifications
+      APP_URL: "${APP_URL:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      # Set to 1 only when serving plain HTTP on a trusted internal network
+      INSECURE_COOKIES: "${INSECURE_COOKIES:-}"
+    volumes:
+      - moc-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  moc-data:

@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+/* Vantage 2026 brand palette (from the Vantage Style Guide) */
+@theme {
+  --color-vantage-50: #e6f7f3;
+  --color-vantage-100: #c2ede2;
+  --color-vantage-500: #00b388; /* Fresh Green — Primary 1 */
+  --color-vantage-600: #008264; /* Medium Green — Primary 2 */
+  --color-vantage-700: #038264; /* Darker Green — text */
+  --color-vantage-800: #02614b;
+  --color-vantage-blue: #015b9a; /* New Dark Blue */
+  --color-vantage-bright: #97c93c; /* New Bright Green */
+  --color-vantage-sky: #57c8e7; /* Accent 1 Blue */
+  --color-vantage-orange: #f15f22; /* Accent 2 Orange Pop */
+  --color-vantage-yellow: #f3b64f; /* Accent 3 Sunny Yellow */
+  --color-ink: #161617; /* Dark Charcoal — Text 1 */
+  --color-ink-2: #3d3b3e; /* Dark Grey — Text 2 */
+  --color-ink-3: #4d4b4b; /* Medium Grey — Text 3 */
+  --color-paper-2: #e6e4e6; /* Web Blue Grey 50% — Background 2 */
+
+  --font-sans: "Poppins", "Century Gothic", "Open Sans", ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+body {
+  background: #f7f8f7;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
