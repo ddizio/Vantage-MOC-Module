@@ -121,10 +121,11 @@ export const DOC_PHASE_LABELS: Record<string, string> = {
   PRE_CLOSEOUT: "Required Prior to Close-Out",
 };
 
+// Action-item timing — when each punch-list item must be completed.
 export const ACTION_CATEGORIES: Record<string, string> = {
-  A: "A — Complete prior to reinventorying hazardous chemicals",
-  B: "B — Required during hot commissioning",
-  C: "C — Complete after start-up / prior to MOC closure",
+  A: "A — Part of design",
+  B: "B — Prior to commissioning",
+  C: "C — Prior to closure",
   GENERAL: "General",
 };
 

@@ -77,7 +77,11 @@ function YesNoRow({
               name="remarks"
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Remarks"
+              onBlur={(e) => {
+                // Save remarks when the field loses focus (not only on Enter).
+                if (remarks !== (row.remarks ?? "")) e.currentTarget.form?.requestSubmit();
+              }}
+              placeholder="Remarks (saved on tab/click away)"
               className="w-full rounded border border-gray-200 px-2 py-1 text-xs"
             />
           </form>

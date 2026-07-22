@@ -19,7 +19,7 @@ export default async function Dashboard() {
   const siteIds = user.memberships.map((m) => m.siteId);
   const siteFilter = user.isAdmin ? {} : { siteId: { in: siteIds } };
 
-  const [myApprovals, myMocs, openMocs, overdueTemp, activeBypasses, myActions] =
+  const [myApprovals, myMocs, openMocs, overdueTemp, activeBypasses, myActions, openActionsForCounts] =
     await Promise.all([
       prisma.approval.findMany({
         where: { assignedToId: user.id, decision: "PENDING", moc: { status: { notIn: ["DRAFT", "CANCELED"] } } },
@@ -54,7 +54,30 @@ export default async function Dashboard() {
         orderBy: { dueDate: "asc" },
         take: 10,
       }),
+      // For the per-employee open/overdue summary (across visible sites).
+      prisma.actionItem.findMany({
+        where: { status: "OPEN", ownerId: { not: null }, moc: siteFilter },
+        include: { owner: { select: { id: true, name: true } } },
+      }),
     ]);
+
+  // #9: count open + overdue action items by owner.
+  const now = new Date();
+  const ownerCounts = new Map<
+    string,
+    { name: string; open: number; overdue: number }
+  >();
+  for (const a of openActionsForCounts) {
+    if (!a.owner) continue;
+    const row =
+      ownerCounts.get(a.owner.id) ?? { name: a.owner.name, open: 0, overdue: 0 };
+    row.open += 1;
+    if (a.dueDate && a.dueDate < now) row.overdue += 1;
+    ownerCounts.set(a.owner.id, row);
+  }
+  const actionsByOwner = [...ownerCounts.values()].sort(
+    (x, y) => y.overdue - x.overdue || y.open - x.open
+  );
 
   return (
     <div className="space-y-6">
@@ -206,6 +229,36 @@ export default async function Dashboard() {
           )}
         </Card>
       </div>
+
+      <Card
+        title="Open actions by employee"
+        subtitle="Team punch-list load across your sites — open and overdue counts"
+      >
+        {actionsByOwner.length === 0 ? (
+          <p className="text-sm text-ink-3">No open action items. 🎉</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-ink-3 border-b border-gray-100">
+                <th className="py-2">Employee</th>
+                <th>Open actions</th>
+                <th>Overdue</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {actionsByOwner.map((r) => (
+                <tr key={r.name}>
+                  <td className="py-2">{r.name}</td>
+                  <td>{r.open}</td>
+                  <td className={r.overdue > 0 ? "text-vantage-orange font-medium" : ""}>
+                    {r.overdue}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
 
       <p className="text-xs text-ink-3">
         Need an MOC? Any change that is <em>not replacement-in-kind</em> needs

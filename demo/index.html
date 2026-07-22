@@ -266,7 +266,8 @@ const WORKFLOWS = {
       {role:"APPROVING_MANAGER",label:"Approving Manager"},
       {role:"MOC_LEAD",label:"MOC Lead"}], next:"ACTIVE", auto:true},
     {stage:"RESTORATION", title:"Return to Service", status:"ACTIVE", sigs:[
-      {role:"MOC_LEAD",label:"MOC Lead"}], next:"CLOSED", auto:false},
+      {role:"MOC_LEAD",label:"MOC Lead"},
+      {role:"PROCESS_SAFETY",label:"Process Safety"}], next:"CLOSED", auto:false},
   ],
 };
 
@@ -330,6 +331,14 @@ const USERS = [
 const userById = id => USERS.find(u=>u.id===id);
 const holderOf = role => USERS.find(u=>u.roles.includes(role));
 
+// Action-item timing (when each punch-list item must be completed).
+const ACTION_TIMING = {
+  A:"A — Part of design",
+  B:"B — Prior to commissioning",
+  C:"C — Prior to closure",
+  GENERAL:"General",
+};
+
 function determineLevel(deg, sig){
   if(deg==="LOW") return sig==="LOW"?1:2;
   return sig==="LOW"?3:4;
@@ -337,7 +346,9 @@ function determineLevel(deg, sig){
 
 // ---- persistent state ----
 // DB is declared before load() runs because load() -> save() assigns to DB.
-const LS_KEY = "vmoc_demo_v1";
+// Bumped to v2 so browsers holding older sample data (created before checklists,
+// action items, and the current workflow) automatically load the fresh seed.
+const LS_KEY = "vmoc_demo_v2";
 let DB = null;
 DB = load();
 
@@ -364,7 +375,7 @@ function seed(){
       "DOC_CHECKLIST|doc-pid":{answer:"NO",remarks:"Markup in progress"},
       "DOC_CHECKLIST|doc-hazard":{answer:"YES"},
     },
-    actions:[{id:"a-seed1",description:"Confirm tie-in isolation valve spec with TA",ownerId:"u-terry",due:plus(7),status:"OPEN"}],
+    actions:[{id:"a-seed1",description:"Confirm tie-in isolation valve spec with TA",category:"A",ownerId:"u-terry",due:plus(7),status:"OPEN"}],
     openStage:"APPROVAL_TO_PROCEED",
   }));
   // 2) Level 1 CLOSED
@@ -383,7 +394,7 @@ function seed(){
       "CLOSEOUT|co-job":{answer:"YES"}, "CLOSEOUT|co-pssr":{answer:"NA"},
       "CLOSEOUT|co-psi":{answer:"YES"}, "CLOSEOUT|co-punch":{answer:"YES"}, "CLOSEOUT|co-ldar":{answer:"NA"},
     },
-    actions:[{id:"a-seed2",description:"Update area emergency map with new eyewash location",ownerId:"u-jamie",due:plus(-10),status:"CLOSED"}],
+    actions:[{id:"a-seed2",description:"Update area emergency map with new eyewash location",category:"C",ownerId:"u-jamie",due:plus(-10),status:"CLOSED"}],
     closed:true,
   }));
   // 3) Temporary, overdue
@@ -394,7 +405,7 @@ function seed(){
     form:{asset:"E-310", plantArea:"Reaction", summary:"Temporary jumper to keep line in service during exchanger clean.",
       technicalBasis:"Maintains production during scheduled clean; restored after.", phaType:"NONE"},
     checklist:{ "DOC_CHECKLIST|doc-pid":{answer:"YES"}, "DOC_CHECKLIST|doc-sops":{answer:"NO",remarks:"Temp SOP pending"} },
-    actions:[{id:"a-seed3",description:"Remove temporary jumper and restore line to original configuration",ownerId:"u-jamie",due:plus(-1),status:"OPEN"}],
+    actions:[{id:"a-seed3",description:"Remove temporary jumper and restore line to original configuration",category:"C",ownerId:"u-jamie",due:plus(-1),status:"OPEN"}],
     approvedThrough:"APPROVAL_TO_PROCEED",
   }));
   // 4) Bypass ACTIVE
@@ -409,7 +420,7 @@ function seed(){
       reason:"Transmitter failed; swap requires interlock offline ~6 h.",
       alternateProtection:"Dedicated operator stationed at local level gauge with radio; filling rate reduced 50%; supervisor notified.",
       implementerName:"Jamie Chen"},
-    actions:[{id:"a-seed4",description:"Verify transmitter calibration after swap before restoring interlock",ownerId:"u-jamie",due:plus(1),status:"OPEN"}],
+    actions:[{id:"a-seed4",description:"Verify transmitter calibration after swap before restoring interlock",category:"B",ownerId:"u-jamie",due:plus(1),status:"OPEN"}],
     approvedThrough:"BYPASS_APPROVAL",
   }));
 
@@ -585,6 +596,38 @@ function viewDashboard(){
       <a data-moc="${m.id}" style="font-weight:600">${esc(m.number)}</a>
       <span style="flex:1">${esc(m.title)}</span>${levelPill(m.level)}${statusPill(m.status)}</div>`).join("");
   h += `</div></div>`;
+
+  // #4: my open action items across all MOCs
+  const today = new Date().toISOString().slice(0,10);
+  const myActions = [];
+  DB.mocs.forEach(m=>m.actions.forEach(a=>{
+    if(a.status==="OPEN" && a.ownerId===CURRENT) myActions.push({m,a});
+  }));
+  h += `<div class="card"><div class="chead"><h2>My open action items</h2><p class="muted">Punch-list items assigned to ${esc(me.name)}</p></div><div class="cbody">`;
+  if(!myActions.length) h += `<p class="muted">No open action items assigned to you.</p>`;
+  else h += `<table><thead><tr><th>MOC</th><th>Action</th><th>Timing</th><th>Due</th></tr></thead><tbody>`+
+    myActions.map(({m,a})=>{
+      const overdue = a.due && a.due < today;
+      return `<tr><td><a data-moc="${m.id}"><b>${esc(m.number)}</b></a></td><td>${esc(a.description)}</td>
+        <td class="muted">${esc((ACTION_TIMING[a.category||"GENERAL"]||"").split(" — ")[0])}</td>
+        <td style="${overdue?"color:var(--orange);font-weight:600":""}">${esc(a.due||"—")}${overdue?" (overdue)":""}</td></tr>`;
+    }).join("")+`</tbody></table>`;
+  h += `</div></div>`;
+
+  // #9: open-action count by employee (open / overdue)
+  const counts = USERS.map(u=>{
+    let open=0, over=0;
+    DB.mocs.forEach(m=>m.actions.forEach(a=>{
+      if(a.status==="OPEN" && a.ownerId===u.id){ open++; if(a.due && a.due < today) over++; }
+    }));
+    return {u, open, over};
+  }).filter(c=>c.open>0).sort((a,b)=>b.over-a.over || b.open-a.open);
+  h += `<div class="card"><div class="chead"><h2>Open actions by employee</h2><p class="muted">Team punch-list load — open and overdue counts</p></div><div class="cbody">`;
+  if(!counts.length) h += `<p class="muted">No open action items across the site. 🎉</p>`;
+  else h += `<table><thead><tr><th>Employee</th><th>Open actions</th><th>Overdue</th></tr></thead><tbody>`+
+    counts.map(c=>`<tr><td>${esc(c.u.name)}${c.u.roles.length?` <span class="muted">— ${esc(ROLE_LABELS[c.u.roles[0]])}</span>`:""}</td>
+      <td>${c.open}</td><td style="${c.over?"color:var(--orange);font-weight:600":""}">${c.over}</td></tr>`).join("")+`</tbody></table>`;
+  h += `</div></div>`;
   return h;
 }
 
@@ -727,15 +770,17 @@ function viewMoc(id){
     h += `<button class="btn" type="submit">Submit for approval</button></form></div></div>`;
   }
 
-  // issue 2: implementation in progress — advance to the next stage (incl. close-out)
+  // issue 2/7: implementation in progress — the lead OR any approver on this MOC
+  // may advance it to the next stage once approvals are complete.
+  const isApprover = m.approvals.some(a=>a.assignedToId===CURRENT);
   const nextManual = m.status==="IMPLEMENTATION"
     ? wf.find(s=>!m.approvals.some(a=>a.stage===s.stage)) : null;
-  if(nextManual && isLead){
+  if(nextManual && (isLead || isApprover)){
     h += `<div class="card"><div class="chead"><h2>Change approved — implementation in progress</h2>
-      <p class="muted">When the work is complete, advance the MOC to the next stage.</p></div><div class="cbody">
+      <p class="muted">When the work is complete, the MOC Lead or any approver can advance it to the next stage.</p></div><div class="cbody">
       <button class="btn blue" data-advance="${m.id}">Mark implementation complete → ${esc(nextManual.title)}</button></div></div>`;
-  } else if(m.status==="IMPLEMENTATION" && !isLead){
-    h += `<div class="banner note">This change is approved and in progress. The MOC Lead (${esc(userById(m.leadId)?.name)}) advances it to the next stage when the work is complete — switch to that persona to continue.</div>`;
+  } else if(m.status==="IMPLEMENTATION"){
+    h += `<div class="banner note">This change is approved and in progress. The MOC Lead or an approver advances it to the next stage when the work is complete — switch to one of those personas to continue.</div>`;
   }
 
   h += `<div class="grid2"><div>`;
@@ -770,7 +815,13 @@ function viewMoc(id){
   h += `</div></div>`;
 
   // checklists + action items (issue 4)
-  (CHECKLISTS[m.type]||[]).forEach(def=>{ h += checklistCard(m, def, open); });
+  // #8: the Level 1 Part 2 close-out checklist is not shown during approval —
+  // only from implementation onward.
+  const preImpl = ["DRAFT","REJECTED","REVIEW"].includes(m.status);
+  (CHECKLISTS[m.type]||[]).forEach(def=>{
+    if(def.kind==="CLOSEOUT" && preImpl) return;
+    h += checklistCard(m, def, open);
+  });
   h += actionsCard(m, open);
 
   // audit
@@ -962,12 +1013,17 @@ function checklistCard(m, def, editable){
 }
 
 function actionsCard(m, editable){
-  let h = `<div class="card"><div class="chead"><h2>Action Items / Punch List</h2><p class="muted">PSSR categories: A pre-inventory · B hot commissioning · C pre-closure</p></div><div class="cbody">`;
+  const openCount = m.actions.filter(a=>a.status==="OPEN").length;
+  let h = `<div class="card"><div class="chead"><h2>Action Items / Punch List</h2>
+    <p class="muted">Action item timing: (A) Part of design · (B) Prior to commissioning · (C) Prior to closure</p></div><div class="cbody">`;
+  if(openCount) h += `<div class="banner warn" style="margin-bottom:10px">${openCount} open action item${openCount===1?"":"s"} — these must be closed before the MOC can be closed out.</div>`;
   if(!m.actions.length) h += `<p class="muted">No action items yet.</p>`;
   else {
-    h += `<table><thead><tr><th>Item</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>`;
+    h += `<table><thead><tr><th>Item</th><th>Timing</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody>`;
     m.actions.forEach(a=>{
+      const cat = a.category || "GENERAL";
       h += `<tr><td class="${a.status==='CLOSED'?'muted':''}">${esc(a.description)}</td>
+        <td class="muted">${esc((ACTION_TIMING[cat]||cat).split(" — ")[0])}</td>
         <td>${esc(userById(a.ownerId)?.name||"—")}</td><td>${esc(a.due||"—")}</td>
         <td>${a.status==="CLOSED"?'<span class="ok">Closed</span>':'<span class="pend">Open</span>'}</td>
         <td style="text-align:right">${editable?`<a data-actoggle="${a.id}" data-mid="${m.id}">${a.status==="OPEN"?"Close":"Reopen"}</a>`:""}</td></tr>`;
@@ -976,7 +1032,12 @@ function actionsCard(m, editable){
   }
   if(editable){
     h += `<form id="actionForm" data-mid="${m.id}" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <input type="text" name="description" placeholder="New action item…" style="flex:1;min-width:180px">
+      <input type="text" name="description" placeholder="New action item…" style="flex:1;min-width:160px">
+      <select class="fi" name="category" style="width:auto" title="Action item timing">
+        <option value="GENERAL">General</option>
+        <option value="A">A — Part of design</option>
+        <option value="B">B — Prior to commissioning</option>
+        <option value="C">C — Prior to closure</option></select>
       <select class="fi" name="ownerId" style="width:auto"><option value="">Owner…</option>${USERS.map(u=>`<option value="${u.id}">${esc(u.name)}</option>`).join("")}</select>
       <input type="date" name="due" style="width:auto">
       <button class="btn sm" type="submit">Add</button></form>`;
@@ -994,7 +1055,8 @@ function addActionItem(mid, fd){
   const m = DB.mocs.find(x=>x.id===mid); if(!m) return;
   const description = (fd.get("description")||"").trim();
   if(!description){ alert("Describe the action item."); return; }
-  m.actions.push({ id:"a-"+Math.random().toString(36).slice(2,9), description,
+  const category = ["A","B","C"].includes(fd.get("category")) ? fd.get("category") : "GENERAL";
+  m.actions.push({ id:"a-"+Math.random().toString(36).slice(2,9), description, category,
     ownerId: fd.get("ownerId")||null, due: fd.get("due")||null, status:"OPEN" });
   addAudit(m, CURRENT, "Action item added", description);
   save(); render();
@@ -1102,6 +1164,11 @@ function openSignDialog(approvalId, mocId){
 function applySignature(mocId, approvalId, decision, name, comment){
   const m = DB.mocs.find(x=>x.id===mocId);
   const a = m.approvals.find(x=>x.id===approvalId);
+  // #3: a MOC cannot be closed out while action items remain open.
+  if(decision==="APPROVED" && a.stage==="CLOSEOUT"){
+    const openc = m.actions.filter(x=>x.status==="OPEN").length;
+    if(openc){ alert("Close all "+openc+" open action item"+(openc===1?"":"s")+" before closing out this MOC."); return; }
+  }
   a.decision = decision; a.signedName = name; a.comment = comment||null; a.at = new Date().toISOString();
   addAudit(m, CURRENT, (decision==="APPROVED"?"Signed / approved: ":"Not approved: ")+a.label, comment||null);
 

@@ -315,6 +315,17 @@ export async function signApprovalAction(
   if (approval.assignedToId !== user.id)
     return fail("This signature is assigned to a different person.");
 
+  // A MOC cannot be closed out while action items remain open.
+  if (decision === "APPROVED" && approval.stage === "CLOSEOUT") {
+    const openActions = await prisma.actionItem.count({
+      where: { mocId: approval.mocId, status: "OPEN" },
+    });
+    if (openActions > 0)
+      return fail(
+        `Close (or reopen and resolve) all ${openActions} open action item${openActions === 1 ? "" : "s"} before closing out this MOC.`
+      );
+  }
+
   await prisma.approval.update({
     where: { id: approvalId },
     data: { decision, signedName, comment: comment || null, decidedAt: new Date() },
@@ -341,17 +352,24 @@ export async function signApprovalAction(
   return { ok: true };
 }
 
-/** MOC Lead advances an implemented change to its next approval stage. */
+/**
+ * Advances an implemented change to its next approval stage. Once approvals are
+ * complete, the MOC Lead, an admin, or any approver on the record may advance it.
+ */
 export async function advanceStageAction(
   _prev: ActionResult,
   form: FormData
 ): Promise<ActionResult> {
   const user = await requireUser();
   const mocId = str(form, "mocId");
-  const moc = await prisma.moc.findUnique({ where: { id: mocId } });
+  const moc = await prisma.moc.findUnique({
+    where: { id: mocId },
+    include: { approvals: { select: { assignedToId: true } } },
+  });
   if (!moc) return fail("MOC not found.");
-  if (moc.leadId !== user.id && !user.isAdmin)
-    return fail("Only the MOC Lead can advance this record.");
+  const isApprover = moc.approvals.some((a) => a.assignedToId === user.id);
+  if (moc.leadId !== user.id && !user.isAdmin && !isApprover)
+    return fail("Only the MOC Lead or an approver on this record can advance it.");
   const stage = await pendingManualStage(mocId);
   if (!stage) return fail("No stage to advance to.");
 

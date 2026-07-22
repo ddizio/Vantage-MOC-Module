@@ -200,11 +200,11 @@ export default async function MocDetailPage({
         </Card>
       )}
 
-      {/* Implementation: advance */}
-      {manualStage && isLead && (
+      {/* Implementation: advance — the lead or any assigned approver may advance */}
+      {manualStage && (isLead || isAssignedApprover) && (
         <Card
           title="Change approved — implementation in progress"
-          subtitle="When the work is complete, advance the MOC to the next stage."
+          subtitle="When the work is complete, the MOC Lead or any approver can advance it to the next stage."
         >
           <AdvancePanel mocId={moc.id} nextTitle={manualStage.title} />
         </Card>
@@ -374,11 +374,15 @@ export default async function MocDetailPage({
               />
             </Card>
           )}
-          {type === "LEVEL1" && (
-            <Card title="Part 2 — Close-Out Checklist">
-              <YesNoChecklist rows={closeout.map(toRow)} editable={openRecord} />
-            </Card>
-          )}
+          {type === "LEVEL1" &&
+            !["DRAFT", "REJECTED", "REVIEW"].includes(moc.status) && (
+              <Card
+                title="Part 2 — Close-Out Checklist"
+                subtitle="Completed after implementation — not part of the approval review."
+              >
+                <YesNoChecklist rows={closeout.map(toRow)} editable={openRecord} />
+              </Card>
+            )}
           {type === "BYPASS" && (
             <Card title="Bypass Operations">
               <BypassPanel
@@ -406,7 +410,7 @@ export default async function MocDetailPage({
           {type !== "BYPASS" && (
             <Card
               title="Action Items / Punch List"
-              subtitle="PSSR punch list categories: A pre-inventory · B hot commissioning · C pre-closure"
+              subtitle="Action item timing: (A) Part of design · (B) Prior to commissioning · (C) Prior to closure"
             >
               <ActionItems
                 mocId={moc.id}

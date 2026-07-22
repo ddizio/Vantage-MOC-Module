@@ -209,7 +209,7 @@ export function ActionItems({
           <thead>
             <tr className="text-left text-xs text-ink-3 border-b border-gray-200">
               <th className="py-1.5">Item</th>
-              <th>Cat.</th>
+              <th>Timing</th>
               <th>Owner</th>
               <th>Due</th>
               <th></th>
@@ -246,11 +246,11 @@ export function ActionItems({
           )}
           <input type="hidden" name="mocId" value={mocId} />
           <input name="description" placeholder="New action item…" className={inputCls} />
-          <select name="category" className={inputCls + " w-40"} title="PSSR punch list category">
+          <select name="category" className={inputCls + " w-44"} title="Action item timing">
             <option value="GENERAL">General</option>
-            <option value="A">A — pre-inventory</option>
-            <option value="B">B — hot commissioning</option>
-            <option value="C">C — pre-closure</option>
+            <option value="A">A — Part of design</option>
+            <option value="B">B — Prior to commissioning</option>
+            <option value="C">C — Prior to closure</option>
           </select>
           <select name="ownerId" className={inputCls + " w-40"}>
             <option value="">Owner…</option>

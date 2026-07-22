@@ -160,8 +160,11 @@ const BYPASS_STAGES: StageSpec[] = [
     status: "ACTIVE",
     title: "Return to Service",
     description:
-      "The signer verifies the safety system has been returned to service and is functioning correctly.",
-    signatures: [{ roleKey: "MOC_LEAD", roleLabel: "MOC Lead" }],
+      "The signers verify the safety system has been returned to service and is functioning correctly. Process Safety countersigns to close the record.",
+    signatures: [
+      { roleKey: "MOC_LEAD", roleLabel: "MOC Lead" },
+      { roleKey: "PROCESS_SAFETY", roleLabel: "Process Safety" },
+    ],
     nextStatus: "CLOSED",
     autoOpenNext: false,
   },
